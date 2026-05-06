@@ -1,98 +1,252 @@
-import { Image } from 'expo-image';
-import { Platform, StyleSheet } from 'react-native';
+import { IconSymbol } from '@/components/ui/icon-symbol';
+import { router } from 'expo-router';
+import { useCallback, useEffect, useState } from 'react';
+import {
+  Pressable,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { HelloWave } from '@/components/hello-wave';
-import ParallaxScrollView from '@/components/parallax-scroll-view';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { Link } from 'expo-router';
+import { AnggaranProgress } from '@/components/anggaran-progress';
+import { TransaksiCard } from '@/components/transaksi-card';
+import { AppColors, Theme } from '@/constants/theme';
+import { buildCacheKey, getCache, saveCache } from '@/db/ai-cache';
+import { Anggaran, getAnggaranByBulan } from '@/db/anggaran';
+import { getSummaryByBulan, getTransaksiByBulan, Transaksi } from '@/db/transaksi';
+import { callAI } from '@/services/ai-service';
+import { buildFinancialContext } from '@/services/context-builder';
+import { useAppStore } from '@/store/use-app-store';
+import { formatRupiah, getNamaBulan } from '@/utils/format';
 
-export default function HomeScreen() {
+export default function DashboardScreen() {
+  const { selectedBulan, selectedTahun, refreshCounter, isOnline, dbReady } = useAppStore();
+
+  const [summary, setSummary] = useState({ total_masuk: 0, total_keluar: 0 });
+  const [recentTransaksi, setRecentTransaksi] = useState<Transaksi[]>([]);
+  const [anggaranList, setAnggaranList] = useState<Anggaran[]>([]);
+  const [aiInsight, setAiInsight] = useState<string | null>(null);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [loading, setLoading] = useState(true);
+
+  const loadData = useCallback(async () => {
+    if (!dbReady) return;
+    setLoading(true);
+    try {
+      const [s, tx, ang] = await Promise.all([
+        getSummaryByBulan(selectedBulan, selectedTahun),
+        getTransaksiByBulan(selectedBulan, selectedTahun),
+        getAnggaranByBulan(selectedBulan, selectedTahun),
+      ]);
+      setSummary(s);
+      setRecentTransaksi(tx.slice(0, 5));
+      setAnggaranList(ang);
+    } finally {
+      setLoading(false);
+    }
+  }, [dbReady, selectedBulan, selectedTahun]);
+
+  const loadAiInsight = useCallback(async () => {
+    const key = buildCacheKey('insight_harian', selectedBulan, selectedTahun);
+    const cached = await getCache(key);
+    if (cached) {
+      setAiInsight(cached.respons);
+      return;
+    }
+    if (!isOnline) return;
+
+    setAiLoading(true);
+    try {
+      const ctx = await buildFinancialContext();
+      const resp = await callAI(
+        'Berikan insight singkat tentang kondisi keuangan saya bulan ini dan satu saran penghematan.',
+        ctx
+      );
+      await saveCache(key, resp, `${selectedBulan}-${selectedTahun}`);
+      setAiInsight(resp);
+    } catch {
+      // silent fail — insight is optional
+    } finally {
+      setAiLoading(false);
+    }
+  }, [isOnline, selectedBulan, selectedTahun]);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData, refreshCounter]);
+
+  useEffect(() => {
+    if (dbReady) loadAiInsight();
+  }, [dbReady, loadAiInsight]);
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await loadData();
+    setRefreshing(false);
+  }, [loadData]);
+
+  const saldo = summary.total_masuk - summary.total_keluar;
+
   return (
-    <ParallaxScrollView
-      headerBackgroundColor={{ light: '#A1CEDC', dark: '#1D3D47' }}
-      headerImage={
-        <Image
-          source={require('@/assets/images/partial-react-logo.png')}
-          style={styles.reactLogo}
-        />
-      }>
-      <ThemedView style={styles.titleContainer}>
-        <ThemedText type="title">Welcome!</ThemedText>
-        <HelloWave />
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 1: Try it</ThemedText>
-        <ThemedText>
-          Edit <ThemedText type="defaultSemiBold">app/(tabs)/index.tsx</ThemedText> to see changes.
-          Press{' '}
-          <ThemedText type="defaultSemiBold">
-            {Platform.select({
-              ios: 'cmd + d',
-              android: 'cmd + m',
-              web: 'F12',
-            })}
-          </ThemedText>{' '}
-          to open developer tools.
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <Link href="/modal">
-          <Link.Trigger>
-            <ThemedText type="subtitle">Step 2: Explore</ThemedText>
-          </Link.Trigger>
-          <Link.Preview />
-          <Link.Menu>
-            <Link.MenuAction title="Action" icon="cube" onPress={() => alert('Action pressed')} />
-            <Link.MenuAction
-              title="Share"
-              icon="square.and.arrow.up"
-              onPress={() => alert('Share pressed')}
-            />
-            <Link.Menu title="More" icon="ellipsis">
-              <Link.MenuAction
-                title="Delete"
-                icon="trash"
-                destructive
-                onPress={() => alert('Delete pressed')}
-              />
-            </Link.Menu>
-          </Link.Menu>
-        </Link>
+    <SafeAreaView style={[styles.safe, { backgroundColor: Theme.background }]} edges={[]}>
+      <ScrollView
+        contentContainerStyle={styles.scroll}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={AppColors.primary} />}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Balance Card */}
+        <View style={[styles.balanceCard, { backgroundColor: Theme.card }]}>
+          <Text style={styles.balanceLabel}>Saldo Bersih · {getNamaBulan(selectedBulan)} {selectedTahun}</Text>
+          <Text style={styles.balanceAmount}>
+            {loading ? '—' : formatRupiah(saldo)}
+          </Text>
+          <View style={styles.balanceRow}>
+            <View style={styles.balanceItem}>
+              <View style={styles.balanceItemIcon}>
+                <IconSymbol name="arrow.down" size={14} color={AppColors.income} />
+              </View>
+              <View>
+                <Text style={styles.balanceItemLabel}>Pemasukan</Text>
+                <Text style={styles.balanceItemValue}>{loading ? '—' : formatRupiah(summary.total_masuk)}</Text>
+              </View>
+            </View>
+            <View style={styles.balanceDivider} />
+            <View style={styles.balanceItem}>
+              <View style={[styles.balanceItemIcon, { backgroundColor: 'rgba(239,68,68,0.2)' }]}>
+                <IconSymbol name="arrow.up" size={14} color={AppColors.expense} />
+              </View>
+              <View>
+                <Text style={styles.balanceItemLabel}>Pengeluaran</Text>
+                <Text style={[styles.balanceItemValue, {color: AppColors.expense}]}>{loading ? '—' : formatRupiah(summary.total_keluar)}</Text>
+              </View>
+            </View>
+          </View>
+        </View>
 
-        <ThemedText>
-          {`Tap the Explore tab to learn more about what's included in this starter app.`}
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 3: Get a fresh start</ThemedText>
-        <ThemedText>
-          {`When you're ready, run `}
-          <ThemedText type="defaultSemiBold">npm run reset-project</ThemedText> to get a fresh{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> directory. This will move the current{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> to{' '}
-          <ThemedText type="defaultSemiBold">app-example</ThemedText>.
-        </ThemedText>
-      </ThemedView>
-    </ParallaxScrollView>
+        {/* Quick Actions */}
+        <View style={styles.quickRow}>
+          <TouchableOpacity
+            style={[styles.quickBtn, { backgroundColor: AppColors.income }]}
+            onPress={() => router.push({ pathname: '/(tabs)/transaksi', params: { tipe: 'masuk' } })}
+          >
+            <IconSymbol name="plus" size={18} color="#fff" />
+            <Text style={styles.quickBtnText}>Pemasukan</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.quickBtn, { backgroundColor: AppColors.expense }]}
+            onPress={() => router.push({ pathname: '/(tabs)/transaksi', params: { tipe: 'keluar' } })}
+          >
+            <IconSymbol name="minus" size={18} color="#fff" />
+            <Text style={styles.quickBtnText}>Pengeluaran</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* AI Insight */}
+        <View style={[styles.section, { backgroundColor: Theme.card, borderColor: Theme.border }]}>
+          <View style={styles.sectionHeader}>
+            <IconSymbol name="sparkles" size={18} color={AppColors.primary} />
+            <Text style={[styles.sectionTitle, { color: Theme.text }]}>Insight AI</Text>
+          </View>
+          {aiLoading ? (
+            <View style={[styles.skeleton, { backgroundColor: Theme.skeleton }]} />
+          ) : aiInsight ? (
+            <Text style={[styles.aiText, { color: Theme.subtext }]}>{aiInsight}</Text>
+          ) : (
+            <Text style={[styles.aiText, { color: Theme.subtext }]}>
+              {isOnline
+                ? 'Tambahkan Gemini API key di Pengaturan untuk mendapatkan insight AI.'
+                : 'Butuh koneksi internet untuk insight AI.'}
+            </Text>
+          )}
+        </View>
+
+        {/* Anggaran Progress */}
+        {anggaranList.length > 0 && (
+          <View style={[styles.section, { backgroundColor: Theme.card, borderColor: Theme.border }]}>
+            <View style={styles.sectionHeader}>
+              <IconSymbol name="chart.pie.fill" size={18} color={AppColors.primary} />
+              <Text style={[styles.sectionTitle, { color: Theme.text }]}>Anggaran</Text>
+            </View>
+            {anggaranList.map((ang) => (
+              <AnggaranProgress key={ang.id} anggaran={ang} />
+            ))}
+          </View>
+        )}
+
+        {/* Recent Transactions */}
+        <View style={[styles.section, { backgroundColor: Theme.card, borderColor: Theme.border }]}>
+          <View style={[styles.sectionHeader, styles.sectionHeaderSpaced]}>
+            <View style={styles.sectionHeaderLeft}>
+              <IconSymbol name="clock.fill" size={18} color={AppColors.primary} />
+              <Text style={[styles.sectionTitle, { color: Theme.text }]}>Transaksi Terbaru</Text>
+            </View>
+            <Pressable onPress={() => router.push('/(tabs)/transaksi')}>
+              <Text style={[styles.seeAll, { color: AppColors.primary }]}>Lihat semua</Text>
+            </Pressable>
+          </View>
+
+          {loading ? (
+            [1, 2, 3].map((i) => (
+              <View key={i} style={[styles.skeleton, { backgroundColor: Theme.skeleton, marginBottom: 8 }]} />
+            ))
+          ) : recentTransaksi.length === 0 ? (
+            <View style={styles.emptyState}>
+              <IconSymbol name="tray.fill" size={40} color={Theme.subtext} />
+              <Text style={[styles.emptyText, { color: Theme.subtext }]}>Belum ada transaksi bulan ini</Text>
+            </View>
+          ) : (
+            recentTransaksi.map((tx) => (
+              <TransaksiCard key={tx.id} transaksi={tx} onDelete={loadData} />
+            ))
+          )}
+        </View>
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  titleContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
+  safe: { flex: 1 },
+  scroll: { padding: 16, paddingBottom: 32, gap: 12 },
+  balanceCard: {
+    borderRadius: 20, padding: 20,
+    borderWidth: 1,
+    borderColor: Theme.border,
   },
-  stepContainer: {
-    gap: 8,
-    marginBottom: 8,
+  balanceLabel: { color: Theme.text, fontSize: 13, marginBottom: 4 },
+  balanceAmount: { color: Theme.text, fontSize: 34, fontWeight: '800', marginBottom: 20 },
+  balanceRow: { flexDirection: 'row', alignItems: 'center' },
+  balanceItem: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10 },
+  balanceItemIcon: {
+    width: 32, height: 32, borderRadius: 16,
+    backgroundColor: 'rgba(16,185,129,0.2)',
+    justifyContent: 'center', alignItems: 'center',
   },
-  reactLogo: {
-    height: 178,
-    width: 290,
-    bottom: 0,
-    left: 0,
-    position: 'absolute',
+  balanceItemLabel: { color: Theme.text, fontSize: 12 },
+  balanceItemValue: { color: AppColors.income, fontSize: 15, fontWeight: '600' },
+  balanceDivider: { width: 1, height: 32, backgroundColor: 'rgba(0, 0, 0, 0.2)', marginHorizontal: 12 },
+  quickRow: { flexDirection: 'row', gap: 12 },
+  quickBtn: {
+    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: 8, paddingVertical: 14, borderRadius: 14,
   },
+  quickBtnText: { color: '#fff', fontSize: 15, fontWeight: '600' },
+  section: {
+    borderRadius: 16, padding: 16,
+    borderWidth: 1,
+  },
+  sectionHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 },
+  sectionHeaderSpaced: { justifyContent: 'space-between' },
+  sectionHeaderLeft: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  sectionTitle: { fontSize: 16, fontWeight: '700' },
+  seeAll: { fontSize: 13, fontWeight: '500' },
+  aiText: { fontSize: 14, lineHeight: 22 },
+  skeleton: { height: 48, borderRadius: 10 },
+  emptyState: { alignItems: 'center', paddingVertical: 24, gap: 10 },
+  emptyText: { fontSize: 14 },
 });

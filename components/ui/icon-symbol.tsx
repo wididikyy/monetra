@@ -6,18 +6,46 @@ import { ComponentProps } from 'react';
 import { OpaqueColorValue, type StyleProp, type TextStyle } from 'react-native';
 
 type IconMapping = Record<SymbolViewProps['name'], ComponentProps<typeof MaterialIcons>['name']>;
-type IconSymbolName = keyof typeof MAPPING;
+export type IconSymbolName = keyof typeof MAPPING;
 
-/**
- * Add your SF Symbols to Material Icons mappings here.
- * - see Material Icons in the [Icons Directory](https://icons.expo.fyi).
- * - see SF Symbols in the [SF Symbols](https://developer.apple.com/sf-symbols/) app.
- */
 const MAPPING = {
+  // Navigation
   'house.fill': 'home',
-  'paperplane.fill': 'send',
-  'chevron.left.forwardslash.chevron.right': 'code',
   'chevron.right': 'chevron-right',
+  'chevron.left': 'chevron-left',
+  'app.grid': 'dashboard',
+  // Actions
+  'paperplane.fill': 'send',
+  'plus': 'add',
+  'minus': 'remove',
+  'trash.fill': 'delete',
+  'arrow.up': 'arrow-upward',
+  'arrow.down': 'arrow-downward',
+  'arrow.left.arrow.right': 'swap-horiz',
+  // UI / Status
+  'eye.fill': 'visibility',
+  'eye.slash.fill': 'visibility-off',
+  'gearshape.fill': 'settings',
+  'sparkles': 'auto-awesome',
+  'wifi.slash': 'wifi-off',
+  'tray.fill': 'inbox',
+  'clock.fill': 'schedule',
+  'circle.fill': 'lens',
+  // Charts
+  'chart.bar.fill': 'bar-chart',
+  'chart.pie.fill': 'pie-chart',
+  'chart.pie': 'pie-chart',
+  // Dev
+  'chevron.left.forwardslash.chevron.right': 'code',
+  // Category icons
+  'fork.knife': 'restaurant',
+  'car.fill': 'directions-car',
+  'bag.fill': 'shopping-bag',
+  'cross.fill': 'local-hospital',
+  'gamecontroller.fill': 'sports-esports',
+  'banknote.fill': 'payments',
+  'laptopcomputer': 'laptop',
+  'square.grid.2x2.fill': 'apps',
 } as IconMapping;
 
 /**
