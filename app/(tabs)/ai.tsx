@@ -1,6 +1,6 @@
+import { IconSymbol } from '@/components/ui/icon-symbol';
 import { router } from 'expo-router';
 import { useCallback, useRef, useState } from 'react';
-import { IconSymbol } from '@/components/ui/icon-symbol';
 import {
   ActivityIndicator,
   FlatList,
@@ -104,6 +104,7 @@ export default function AiScreen() {
         { id: Date.now().toString(), role: 'assistant', text: respons, timestamp: new Date() },
       ]);
     } catch (e: any) {
+      console.error(e)
       const errMsg = e?.message?.includes('API key')
         ? 'API key belum diset. Tambahkan Gemini API key di Pengaturan.'
         : 'Gagal mendapatkan respons. Coba lagi nanti.';

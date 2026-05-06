@@ -1,7 +1,7 @@
 import * as SecureStore from 'expo-secure-store';
 
 const API_KEY_STORAGE = 'gemini_api_key';
-const GEMINI_MODEL = 'gemini-2.0-flash';
+const GEMINI_MODEL = 'gemini-2.5-flash';
 
 export async function getApiKey(): Promise<string | null> {
   return await SecureStore.getItemAsync(API_KEY_STORAGE);
