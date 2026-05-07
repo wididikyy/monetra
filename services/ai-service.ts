@@ -1,10 +1,14 @@
 import * as SecureStore from 'expo-secure-store';
 
-const API_KEY_STORAGE = 'gemini_api_key';
-const GEMINI_MODEL = 'gemini-2.5-flash';
+const API_KEY_STORAGE = 'groq_api_key';
+const GROQ_MODEL = 'llama-3.3-70b-versatile';
+const GROQ_URL = 'https://api.groq.com/openai/v1/chat/completions';
+const RETRY_STATUSES = new Set([429, 503]);
+const MAX_RETRIES = 3;
 
 export async function getApiKey(): Promise<string | null> {
-  return await SecureStore.getItemAsync(API_KEY_STORAGE);
+  const stored = await SecureStore.getItemAsync(API_KEY_STORAGE);
+  return stored ?? process.env.EXPO_PUBLIC_GROQ_API_KEY ?? null;
 }
 
 export async function saveApiKey(key: string): Promise<void> {
@@ -22,35 +26,42 @@ export async function callAI(
   const apiKey = await getApiKey();
   if (!apiKey) throw new Error('API key belum diset. Silakan tambahkan di Pengaturan.');
 
-  const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        system_instruction: {
-          parts: [{ text: financialContext }],
-        },
-        contents: [
-          {
-            role: 'user',
-            parts: [{ text: userMessage }],
-          },
-        ],
-        generationConfig: {
-          maxOutputTokens: 1024,
-          temperature: 0.7,
-        },
-      }),
-    }
-  );
+  const body = JSON.stringify({
+    model: GROQ_MODEL,
+    messages: [
+      { role: 'system', content: financialContext },
+      { role: 'user', content: userMessage },
+    ],
+    max_tokens: 1024,
+    temperature: 0.7,
+  });
 
-  if (!response.ok) {
+  let lastError: Error | null = null;
+  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+    if (attempt > 0) {
+      await new Promise((r) => setTimeout(r, 1000 * 2 ** attempt));
+    }
+
+    const response = await fetch(GROQ_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`,
+      },
+      body,
+    });
+
+    if (response.ok) {
+      const data = await response.json();
+      return data?.choices?.[0]?.message?.content ?? 'Tidak ada respons dari AI.';
+    }
+
     const err = await response.json().catch(() => ({}));
     const msg = (err as any)?.error?.message ?? `HTTP ${response.status}`;
-    throw new Error(`Gemini error: ${msg}`);
+    lastError = new Error(`Groq error: ${msg}`);
+
+    if (!RETRY_STATUSES.has(response.status)) break;
   }
 
-  const data = await response.json();
-  return data?.candidates?.[0]?.content?.parts?.[0]?.text ?? 'Tidak ada respons dari AI.';
+  throw lastError!;
 }

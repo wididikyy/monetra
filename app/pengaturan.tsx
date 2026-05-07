@@ -159,17 +159,17 @@ export default function PengaturanScreen() {
         </View>
 
         {/* AI API Key */}
-        <Text style={[styles.groupLabel, { color: Theme.subtext }]}>GEMINI API KEY</Text>
+        <Text style={[styles.groupLabel, { color: Theme.subtext }]}>GROQ API KEY</Text>
         <View style={[styles.card, { backgroundColor: Theme.card, borderColor: Theme.border }]}>
           <Text style={[styles.hint, { color: Theme.subtext }]}>
-            Diperlukan untuk fitur Asisten AI. Dapatkan gratis di Google AI Studio.
+            Diperlukan untuk fitur Asisten AI. Dapatkan gratis di console.groq.com.
           </Text>
           <View style={styles.keyInputRow}>
             <TextInput
               style={[styles.input, styles.inputFlex, { backgroundColor: Theme.background, color: Theme.text, borderColor: Theme.border }]}
               value={apiKey}
               onChangeText={setApiKey}
-              placeholder="AIza..."
+              placeholder="gsk_..."
               placeholderTextColor={Theme.subtext}
               secureTextEntry={!showKey}
               autoCapitalize="none"
