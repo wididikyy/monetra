@@ -1,8 +1,26 @@
-# Welcome to your Expo app 👋
+# Monetra
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+Monetra is an offline-first personal finance management app built with React Native and Expo. Track income and expenses, set budgets, view spending reports, and get AI-powered financial insights — all stored locally on your device.
 
-## Get started
+## Features
+
+- **Dashboard** — balance overview, quick actions, AI insights, budget progress, recent transactions
+- **Transactions** — add/delete income and expense entries with category selection
+- **Reports** — donut chart, spending trends, and category breakdown
+- **AI Assistant** — chat with Groq AI for financial advice, with offline cache fallback
+- **Settings** — manage API key, edit profile, reset data
+
+## Tech Stack
+
+- [React Native](https://reactnative.dev/) + [Expo SDK 54](https://expo.dev/)
+- [Expo Router](https://docs.expo.dev/router/introduction/) — file-based navigation
+- [expo-sqlite](https://docs.expo.dev/versions/latest/sdk/sqlite/) — local database (no backend)
+- [Zustand](https://zustand-demo.pmnd.rs/) — global state management
+- [Groq API](https://console.groq.com/) (`llama-3.3-70b-versatile`) — AI assistant
+- [react-native-svg](https://github.com/software-mansion/react-native-svg) + [victory-native](https://commerce.nearform.com/open-source/victory-native/) — charts
+- [expo-secure-store](https://docs.expo.dev/versions/latest/sdk/securestore/) — secure API key storage
+
+## Getting Started
 
 1. Install dependencies
 
@@ -16,35 +34,42 @@ This is an [Expo](https://expo.dev) project created with [`create-expo-app`](htt
    npx expo start
    ```
 
-In the output, you'll find options to open the app in a
+3. Open in:
+   - [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
+   - [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
+   - [Expo Go](https://expo.dev/go) on a physical device
 
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
+## AI Setup
 
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
+To use the AI assistant, add your [Groq API key](https://console.groq.com/) in the app's **Settings** screen. The key is stored securely using `expo-secure-store`. You can also set it via the `EXPO_PUBLIC_GROQ_API_KEY` environment variable.
 
-## Get a fresh project
+## Project Structure
 
-When you're ready, run:
+```
+app/
+  onboarding.tsx          # First-run profile setup
+  pengaturan.tsx          # Settings screen
+  (tabs)/
+    index.tsx             # Dashboard
+    transaksi.tsx         # Transaction list & add modal
+    laporan.tsx           # Reports & charts
+    ai.tsx                # AI chat assistant
 
-```bash
-npm run reset-project
+components/
+  transaksi-card.tsx      # Transaction item (long-press to delete)
+  anggaran-progress.tsx   # Budget progress bar
+  grafik-pengeluaran.tsx  # SVG donut chart
+
+db/                       # SQLite CRUD modules (transaksi, kategori, profil, anggaran, ai-cache)
+services/                 # Groq API client & financial context builder
+store/                    # Zustand global state (use-app-store.ts)
+hooks/                    # DB init, network status
+utils/                    # formatRupiah, formatTanggal, etc.
+constants/                # Theme colors, default categories
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+## Notes
 
-## Learn more
-
-To learn more about developing your project with Expo, look at the following resources:
-
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
-
-## Join the community
-
-Join our community of developers creating universal apps.
-
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+- All data is stored locally — no backend or authentication required
+- UI language: Bahasa Indonesia
+- Default categories are seeded on first launch
