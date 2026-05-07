@@ -106,7 +106,7 @@ export default function AiScreen() {
     } catch (e: any) {
       console.error(e)
       const errMsg = e?.message?.includes('API key')
-        ? 'API key belum diset. Tambahkan Gemini API key di Pengaturan.'
+        ? 'API key belum diset. Tambahkan Groq API key di Pengaturan.'
         : 'Gagal mendapatkan respons. Coba lagi nanti.';
       setMessages((prev) => [
         ...prev,

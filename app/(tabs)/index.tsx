@@ -2,13 +2,13 @@ import { IconSymbol } from '@/components/ui/icon-symbol';
 import { router } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import {
-  Pressable,
-  RefreshControl,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
+    Pressable,
+    RefreshControl,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -159,7 +159,7 @@ export default function DashboardScreen() {
           ) : (
             <Text style={[styles.aiText, { color: Theme.subtext }]}>
               {isOnline
-                ? 'Tambahkan Gemini API key di Pengaturan untuk mendapatkan insight AI.'
+                ? 'Tambahkan Groq API key di Pengaturan untuk mendapatkan insight AI.'
                 : 'Butuh koneksi internet untuk insight AI.'}
             </Text>
           )}
