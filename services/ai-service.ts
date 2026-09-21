@@ -1,7 +1,7 @@
 import * as SecureStore from 'expo-secure-store';
 
 const API_KEY_STORAGE = 'groq_api_key';
-const GROQ_MODEL = 'llama-3.3-70b-versatile';
+const GROQ_MODEL = 'openai/gpt-oss-20b';
 const GROQ_URL = 'https://api.groq.com/openai/v1/chat/completions';
 const RETRY_STATUSES = new Set([429, 503]);
 const MAX_RETRIES = 3;
@@ -21,10 +21,13 @@ export async function deleteApiKey(): Promise<void> {
 
 export async function callAI(
   userMessage: string,
-  financialContext: string
+  financialContext: string,
+  onChunk?: (chunk: string) => void
 ): Promise<string> {
   const apiKey = await getApiKey();
   if (!apiKey) throw new Error('API key belum diset. Silakan tambahkan di Pengaturan.');
+
+  const streaming = typeof onChunk === 'function';
 
   const body = JSON.stringify({
     model: GROQ_MODEL,
@@ -32,8 +35,9 @@ export async function callAI(
       { role: 'system', content: financialContext },
       { role: 'user', content: userMessage },
     ],
-    max_tokens: 1024,
+    max_tokens: 300,
     temperature: 0.7,
+    ...(streaming && { stream: true }),
   });
 
   let lastError: Error | null = null;
@@ -51,17 +55,86 @@ export async function callAI(
       body,
     });
 
-    if (response.ok) {
-      const data = await response.json();
-      return data?.choices?.[0]?.message?.content ?? 'Tidak ada respons dari AI.';
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      const msg = (err as any)?.error?.message ?? `HTTP ${response.status}`;
+      lastError = new Error(`Groq error: ${msg}`);
+      if (!RETRY_STATUSES.has(response.status)) break;
+      continue;
     }
 
-    const err = await response.json().catch(() => ({}));
-    const msg = (err as any)?.error?.message ?? `HTTP ${response.status}`;
-    lastError = new Error(`Groq error: ${msg}`);
+    if (streaming) {
+      const raw = await response.text();
+      // Use true streaming when body is a ReadableStream; otherwise parse the
+      // full SSE text at once (React Native fetch may not expose response.body).
+      if (response.body) {
+        return readStream(response.body, onChunk!);
+      }
+      return parseSSEText(raw, onChunk!);
+    }
 
-    if (!RETRY_STATUSES.has(response.status)) break;
+    const data = await response.json();
+    return data?.choices?.[0]?.message?.content ?? 'Tidak ada respons dari AI.';
   }
 
   throw lastError!;
+}
+
+function parseSSEText(raw: string, onChunk: (chunk: string) => void): string {
+  let full = '';
+  for (const line of raw.split('\n')) {
+    const trimmed = line.trim();
+    if (!trimmed.startsWith('data:')) continue;
+    const data = trimmed.slice(5).trim();
+    if (data === '[DONE]') continue;
+    try {
+      const parsed = JSON.parse(data);
+      const text = parsed?.choices?.[0]?.delta?.content ?? '';
+      if (text) {
+        full += text;
+        onChunk(text);
+      }
+    } catch {
+      // ignore malformed SSE chunks
+    }
+  }
+  return full || 'Tidak ada respons dari AI.';
+}
+
+async function readStream(
+  body: ReadableStream<Uint8Array>,
+  onChunk: (chunk: string) => void
+): Promise<string> {
+  const reader = body.getReader();
+  const decoder = new TextDecoder();
+  let full = '';
+  let buffer = '';
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split('\n');
+    buffer = lines.pop() ?? '';
+
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed.startsWith('data:')) continue;
+      const data = trimmed.slice(5).trim();
+      if (data === '[DONE]') continue;
+      try {
+        const parsed = JSON.parse(data);
+        const text = parsed?.choices?.[0]?.delta?.content ?? '';
+        if (text) {
+          full += text;
+          onChunk(text);
+        }
+      } catch {
+        // ignore malformed SSE chunks
+      }
+    }
+  }
+
+  return full || 'Tidak ada respons dari AI.';
 }

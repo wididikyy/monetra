@@ -62,7 +62,6 @@ export default function AiScreen() {
     setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 100);
 
     if (!isOnline) {
-      // Try cache first
       const key = buildCacheKey(userMsg, selectedBulan, selectedTahun);
       const cached = await getCache(key);
       if (cached) {
@@ -86,32 +85,50 @@ export default function AiScreen() {
     }
 
     setLoading(true);
+    const assistantId = (Date.now() + 1).toString();
+    let messageAdded = false;
+
     try {
       const cacheKey = buildCacheKey(userMsg, selectedBulan, selectedTahun);
       const cached = await getCache(cacheKey);
 
-      let respons: string;
       if (cached) {
-        respons = cached.respons;
-      } else {
-        const ctx = await buildFinancialContext();
-        respons = await callAI(userMsg, ctx);
-        await saveCache(cacheKey, respons, `${selectedBulan}-${selectedTahun}`);
+        setMessages((prev) => [
+          ...prev,
+          { id: assistantId, role: 'assistant', text: cached.respons, timestamp: new Date() },
+        ]);
+        return;
       }
 
-      setMessages((prev) => [
-        ...prev,
-        { id: Date.now().toString(), role: 'assistant', text: respons, timestamp: new Date() },
-      ]);
+      const ctx = await buildFinancialContext();
+      const fullResponse = await callAI(userMsg, ctx, (chunk) => {
+        if (!messageAdded) {
+          setMessages((prev) => [
+            ...prev,
+            { id: assistantId, role: 'assistant', text: chunk, timestamp: new Date() },
+          ]);
+          setLoading(false);
+          messageAdded = true;
+        } else {
+          setMessages((prev) =>
+            prev.map((m) => (m.id === assistantId ? { ...m, text: m.text + chunk } : m))
+          );
+        }
+        listRef.current?.scrollToEnd({ animated: false });
+      });
+
+      await saveCache(cacheKey, fullResponse, `${selectedBulan}-${selectedTahun}`);
     } catch (e: any) {
-      console.error(e)
+      console.error(e);
       const errMsg = e?.message?.includes('API key')
         ? 'API key belum diset. Tambahkan Groq API key di Pengaturan.'
         : 'Gagal mendapatkan respons. Coba lagi nanti.';
-      setMessages((prev) => [
-        ...prev,
-        { id: Date.now().toString(), role: 'assistant', text: errMsg, timestamp: new Date() },
-      ]);
+      if (!messageAdded) {
+        setMessages((prev) => [
+          ...prev,
+          { id: assistantId, role: 'assistant', text: errMsg, timestamp: new Date() },
+        ]);
+      }
     } finally {
       setLoading(false);
       setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 100);
